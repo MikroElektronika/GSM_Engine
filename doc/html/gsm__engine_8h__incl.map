@@ -1,7 +1,0 @@
-<map id="gsm_engine.h" name="gsm_engine.h">
-<area shape="rect" id="node2" href="$at__config_8h.html" title="GSM Engine and AT Parser Configuration. " alt="" coords="132,155,219,181"/>
-<area shape="rect" id="node7" href="$at__parser_8h.html" title="AT Parser. " alt="" coords="24,80,111,107"/>
-<area shape="rect" id="node8" href="$at__timer_8h.html" title="AT Timer. " alt="" coords="135,80,215,107"/>
-<area shape="rect" id="node9" href="$gsm__adapter_8h.html" title="GSM Adapter. " alt="" coords="240,80,348,107"/>
-<area shape="rect" id="node10" href="$gsm__hal_8h.html" title="GSM HAL layer. " alt="" coords="247,155,330,181"/>
-</map>
