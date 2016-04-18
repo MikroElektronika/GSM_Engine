@@ -13,7 +13,7 @@
 *****************************************************************************/
 /**
  * @file gsm_hal.h
- * @brief GSM HAL layer
+ * @brief HAL layer
  *
  * @par
  * HAL layer for GSM engine
@@ -97,6 +97,8 @@ void gsm_hal_init( void );
  * @param[in] buffer
  */
 void gsm_hal_write( char *buffer );
+
+void gsm_hal_invert( bool invert );
 
 #ifdef __cplusplus
 } // extern "C"

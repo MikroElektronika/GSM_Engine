@@ -1,6 +1,6 @@
 /****************************************************************************
-* Title                 :   GSM ADAPTER
-* Filename              :   gsm_adapter.c
+* Title                 :   AT PARSER
+* Filename              :   at_parser.h
 * Author                :   MSV
 * Origin Date           :   10/03/2016
 * Notes                 :   None
@@ -8,12 +8,12 @@
 /**************************CHANGE LIST **************************************
 *
 *    Date    Software Version    Initials   Description
-*  10/03/16        1.0.0           MSV      Interface Created.
+*  10/03/16    XXXXXXXXXXX         MSV      Interface Created.
 *
 *****************************************************************************/
 /**
- * @file gsm_adapter.c
- * @brief GSM Adapter
+ * @file at_receiver.c
+ * @brief AT Receiver
  */
 /******************************************************************************
 * Includes
@@ -98,16 +98,168 @@ void at_adapter_reset( void )
 
 int at_adapter_tx( char tx_input )
 {
-    // TX IMPEMENTATION
+    if( tx_input != '\0' )
+    {
+        tx_buffer[ tx_idx++ ] = tx_input;
 
+    } else {
 
+        if( !exception_f )
+        {
+            tx_buffer[ tx_idx++ ] = '\r';
+            tx_buffer[ tx_idx++ ] = '\n';
+            tx_buffer[ tx_idx ]   = '\0';
+            
+        } else {
+        
+            tx_buffer[ tx_idx++ ] = 0x1A;
+            tx_buffer[ tx_idx++ ] = '\r';
+            tx_buffer[ tx_idx ]   = '\0';
+        }
+
+        while( !gsm_tx_ctl() );
+
+        gsm_hal_write( tx_buffer );
+        tx_idx = 0;
+
+        exception_f = false;
+        response_f = false;
+        cue_f = true;
+
+        return 1;
+    }
+
+    if ( tx_idx == AT_TRANSFER_SIZE )
+    {
+        tx_buffer[ tx_idx ] = '\0';
+
+        while( !gsm_tx_ctl() );
+
+        gsm_hal_write( tx_buffer );
+        tx_idx = 0;
+
+        return 0;
+    }
+    return 0;
 }
 
 void at_adapter_rx( char rx_input )
 {
-    // RX IMPLEMENTATION
+    if( rx_input == '\r' )
+        term_f = true;
 
+    if( rx_input == '\n' && term_f )
+    {
+        term_f = false;
+        frag_f = true;
+    }
 
+    if( !frag_f )
+    {
+        if( !head_f && !data_f && !summ_f )
+        {
+            if( rx_input == 'A' ) {
+
+                head_f = true;
+
+            } else if( rx_input == 'O' || rx_input == 'E' ||
+                       rx_input == 'B' || rx_input == 'C' ||
+                       rx_input == 'R' || rx_input == 'N' || rx_input == 'P' ) {
+
+                summ_f = true;
+
+            } else if ( rx_input == '+' || data_t ) {
+
+                data_f = true;
+            }
+        }
+
+        if( rx_input == '>' )
+        {
+            exception_f = true;
+        }
+    }
+
+    if( head_f )
+    {
+        if( !head_t )
+            head_t = true;
+
+        rx_buffer[ rx_idx++ ] = rx_input;
+    }
+
+    if( data_f )
+    {
+        if( !data_t )
+        {
+            data_t = true;
+            data_ptr = &rx_buffer[ rx_idx ];
+        }
+
+        rx_buffer[ rx_idx++ ] = rx_input;
+    }
+
+    if( summ_f )
+    {
+        if( !summ_t )
+            summ_t = true;
+
+        rx_buffer[ rx_idx++ ] = rx_input;
+    }
+
+    if( frag_f )
+    {
+        if( head_f )
+            head_f = false;
+
+        if( data_f )
+        {
+            while ( *error )
+            {
+                if( error[ err_c ] == *( data_ptr + err_c++ ) )
+                {
+                    err_f = true;
+
+                } else {
+
+                    err_f = false;
+                    break;
+                }
+            }
+
+            if( err_f )
+            {
+                //gsm_rx_ctl( false );
+                rx_buffer[ rx_idx ] = '\0';
+                response_f = true;
+            }
+
+            if( !head_t )
+            {
+                //gsm_rx_ctl( false );
+                rx_buffer[ rx_idx ] = '\0';
+                response_f = true;
+            }
+
+            err_c = 0;
+            data_f = false;
+        }
+
+        if( summ_f )
+        {
+            //gsm_rx_ctl( false );
+            rx_buffer[ rx_idx ] = '\0';
+            response_f = true;
+        }
+
+        frag_f = false;
+    }
+
+    if( rx_idx == AT_TRANSFER_SIZE )
+    {
+        //gsm_rx_ctl( false );
+        rx_buffer[ rx_idx ] = '\0';
+        response_f = true;
+    }
 }
-
 /*************** END OF FUNCTIONS *********************************************/

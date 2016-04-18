@@ -23,6 +23,10 @@
 /******************************************************************************
 * Includes
 *******************************************************************************/
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
+#include <stdbool.h>
 #include "at_config.h"
 /******************************************************************************
 * Preprocessor Constants
@@ -39,8 +43,6 @@
 /******************************************************************************
 * Typedefs
 *******************************************************************************/
-typedef void ( *at_cmd_cb )( char *buffer );
-
 /**
  * @enum at_ctl_t
  * @brief AT Command Type
@@ -67,7 +69,7 @@ typedef enum
 
 /**
  * @struct at_cmd_t
- * @brief AT Parser Structure
+ * @brief Parser Structure
  *
  * @par
  * This struct is used for storing the command with timeout and callbacks.
@@ -115,32 +117,32 @@ extern "C"{
 void at_parser_init();
 
 /**
- * @brief Store AT Command
+ * @brief Store Command
  *
  * @par
  * Stores the command and function pointers for command provided.
  *
  * @param[in] command
  * @param[in] timeout
- * @param[in] getter callback
- * @param[in] setter callback
- * @param[in] tester callback
- * @param[in] executer callback
+ * @param[in] getter
+ * @param[in] setter
+ * @param[in] tester
+ * @param[in] executer
  */
 void at_parser_store( char *command,
                       uint32_t timeout,
                       at_cmd_cb getter,
                       at_cmd_cb setter,
-                      at_cmd_cb test,
+                      at_cmd_cb tester,
                       at_cmd_cb execute );
 
 /**
- * @brief Parse AT Command
+ * @brief Parse Command
  *
  * @par
  * Parses provided input and sets the callback and timeout for provided input.
  *
- * @param[in]  cmd
+ * @param[in] cmd
  * @param[out] cb
  * @param[out] timeout
  */

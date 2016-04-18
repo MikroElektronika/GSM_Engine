@@ -37,6 +37,7 @@
 static uint8_t              header_size;
 static uint8_t              at_cmd_storage_used;
 static volatile at_cmd_t    at_cmd_storage      [ AT_STORAGE_SIZE ];
+static char                 at_start_chars      [ AT_HEAD_CHARS_SIZE ];
 /******************************************************************************
 * Function Prototypes
 *******************************************************************************/
@@ -192,14 +193,14 @@ void at_parse( char *input,
 
     if( !( cmd_type = _at_sub_parse( input, cmd_temp ) ) )
     {
-        *cb = at_cmd_storage[ 0 ].executer;
+        *cb = at_cmd_storage[ 0 ].tester;
         *timeout = at_cmd_storage[ 0 ].timeout;
         return;
     }
 
     if( !( cmd_idx = _at_search( cmd_temp ) ) )
     {
-        *cb = at_cmd_storage[ 0 ].executer;
+        *cb = at_cmd_storage[ 0 ].tester;
         *timeout = at_cmd_storage[ 0 ].timeout;
         return;
     }

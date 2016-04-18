@@ -61,20 +61,20 @@ volatile char                   rx_buffer[ AT_TRANSFER_SIZE ];
 *******************************************************************************/
 void gsm_engine_init( at_cmd_cb default_callback )
 {
+    cb_default = default_callback;
+    
     at_adapter_init();
     at_timer_init();
     at_parser_init();
 
-    at_cmd_save( "+CMS ERROR :", DEFAULT_TIMEOUT, default_callback,
-                                                  default_callback,
-                                                  default_callback,
+    at_cmd_save( "+CMS ERROR :", DEFAULT_TIMEOUT, default_callback, 
+                                                  default_callback, 
+                                                  default_callback, 
                                                   default_callback );
 
     exception_f   = false;
-    response_f   = false;
-    cue_f       = false;
-
-    cb_default = default_callback;
+    response_f    = false;
+    cue_f         = false;
 
     memset( ( void* )tx_buffer, 0, AT_TRANSFER_SIZE );
 }
@@ -139,6 +139,7 @@ void gsm_process()
 {
     if( response_f )
     {
+        gsm_rx_ctl( false );
         at_timer_stop();
         at_parse( rx_buffer, &cb, &temp_timer );
         cb( rx_buffer );
@@ -152,6 +153,7 @@ void gsm_process()
 
     if( timeout_f )
     {
+        gsm_rx_ctl( false );
         at_timer_stop();
         at_parse( rx_buffer, &cb, &temp_timer );
         cb( rx_buffer );

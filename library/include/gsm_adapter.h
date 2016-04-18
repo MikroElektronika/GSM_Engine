@@ -1,6 +1,6 @@
 /******************************************************************************
-* Title                 :   GSM ADAPTER
-* Filename              :   gsm_adapter.h
+* Title                 :   AT PARSER
+* Filename              :   at_parser.h
 * Author                :   MSV
 * Origin Date           :   10/03/2016
 * Notes                 :   None
@@ -8,18 +8,18 @@
 /**************************CHANGE LIST ****************************************
 *
 *    Date    Software Version    Initials   Description
-*  10/03/16        1.0.0           MSV      Interface Created.
+*  10/03/16    XXXXXXXXXXX         MSV      Interface Created.
 *
 *******************************************************************************/
 /**
- * @file gsm_adapter.h
- * @brief GSM Adapter
+ * @file at_engine.h
+ * @brief AT Engine
  *
  * @par
- * Adapter for specific GSM module.
+ * Engine for AT commands.
  */
-#ifndef GSM_ADAPTER_H
-#define GSM_ADAPTER_H
+#ifndef AT_RECEIVER_H
+#define AT_RECEIVER_H
 /******************************************************************************
 * Includes
 *******************************************************************************/
@@ -58,34 +58,24 @@ extern "C"{
 #endif
 
 /**
- * @brief Adapter Init
- *
- * @par
- * Must be called before any usage of adapter functions
+ * @brief at_receiver_init
  */
 void at_adapter_init( void );
 
 /**
- * @brief GSM Adapter Reset
- *
- * @par
- * Resets the receive flags. This function must be executed after any
- * successfull or unsuccessfull transmision on RX.
+ * @brief at_receiver_reset
  */
 void at_adapter_reset( void );
 
 /**
- * @brief GSM Transmit
- *
- * @param[in] tx_input - character that is going to be transmiter through the
- * UART bus
+ * @brief at_tx
+ * @param tx_input
  */
 int at_adapter_tx( char tx_input );
 
 /**
- * @brief GSM Receive
+ * @brief AT feed
  *
- * @par
  * This function should be placed inside the UART RX interrupt routine.
  *
  * @param[in] rx_input - character received through UART bus
@@ -96,5 +86,5 @@ void at_adapter_rx( char rx_input );
 } // extern "C"
 #endif
 
-#endif // GSM_ADAPTER_H
+#endif // AT_RECEIVER_H
 /*** End of File **************************************************************/

@@ -13,7 +13,7 @@
 *******************************************************************************/
 /**
  * @file gsm_hal.c
- * @brief GSM HAL layer
+ * @brief HAL layer
  */
 /******************************************************************************
 * Includes
@@ -56,7 +56,6 @@ static void         ( *write_uart_text_p )      ( unsigned char *text );
     defined( __MIKROC_PRO_FOR_8051__ )    || \
     defined( __MIKROC_PRO_FOR_FT90x__ )
 extern sfr sbit GSM_PWR;
-extern sfr sbit GSM_RST;
 extern sfr sbit GSM_RTS;
 extern sfr sbit GSM_CTS;
 #endif
@@ -81,7 +80,7 @@ void gsm_hal_reset( void )
     GSM_PWR = 0;
     Delay_ms( 2500 );
     GSM_PWR = 1;
-    Delay_ms( 500 );
+    Delay_ms( 100 );
 #endif
 }
 
@@ -94,10 +93,10 @@ bool gsm_tx_ctl()
     defined( __MIKROC_PRO_FOR_8051__ )  || \
     defined( __MIKROC_PRO_FOR_FT90x__ ) || \
     defined( __MIKROC_PRO_FOR_PIC__ )
-    if ( GSM_RTS == 0 )
-        return true;
-    else
+    if ( GSM_CTS )
         return false;
+    else
+        return true;
 #endif
 }
 
@@ -111,9 +110,9 @@ void gsm_rx_ctl( bool state )
     defined( __MIKROC_PRO_FOR_FT90x__ ) || \
     defined( __MIKROC_PRO_FOR_PIC__ )
     if ( state )
-        GSM_CTS = 0;
+        GSM_RTS = 0;
     else
-        GSM_CTS = 1;
+        GSM_RTS = 1;
 #endif
 }
 
@@ -135,11 +134,8 @@ void gsm_hal_init()
     Delay_ms( 2500 );
     GSM_PWR = 1;
     Delay_ms( 12500 );
-    
 #endif
     gsm_rx_ctl( true );
-    
-
 }
 
 void gsm_hal_write( char *buffer )

@@ -8,7 +8,7 @@
 /**************************CHANGE LIST ****************************************
 *
 *    Date    Software Version    Initials   Description
-*  10/03/16        1.0.0           MSV      Interface Created.
+*  10/03/16    XXXXXXXXXXX         MSV      Interface Created.
 *
 *******************************************************************************/
 /**
@@ -31,6 +31,10 @@
  * AT Head */
 #define AT_HEAD                                         "AT"
 #define AT_HEAD_SIZE                                    2
+
+#define AT_HEAD_CHARS                                   "+&"
+#define AT_HEAD_CHARS_SIZE                              2
+
 /**
  * General Error Message */
 #define AT_CMS_ERROR                                    "+CMS ERROR:"
@@ -47,14 +51,23 @@
  * @link at_buffer.h @endlink
  * This is the maximum amount of characters that can be transfered per one
  * sequence in both directions. */
-#define AT_TRANSFER_SIZE                                256
+#define AT_TRANSFER_SIZE                                1024
 /**
  * Default timeout in milliseconds for the specific module */
 #define DEFAULT_TIMEOUT                                 500
+
 /******************************************************************************
 * Typedefs
 *******************************************************************************/
+typedef enum
+{
+    AT_OK,
+    AT_ERROR,
+    AT_UNKNOWN
 
+}at_t;
+
+typedef void ( *at_cmd_cb )( char *buffer );
 /******************************************************************************
 * Module Variable Definitions
 *******************************************************************************/

@@ -99,7 +99,7 @@ void gsm_engine_init( at_cmd_cb default_callback );
 void at_cmd( char *input );
 
 /**
- * @brief AT Addition
+ * @brief AT addition
  *
  * @par
  * Some AT commands requires additional data, this function is used to add the
@@ -125,8 +125,8 @@ void at_cmd_addition( char *input );
  */
 void at_cmd_save( char *cmd,
                   uint32_t timeout,
-                  at_cmd_cb setter,
                   at_cmd_cb getter,
+                  at_cmd_cb setter,
                   at_cmd_cb tester,
                   at_cmd_cb executer );
 
