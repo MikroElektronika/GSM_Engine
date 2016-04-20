@@ -98,6 +98,10 @@ void at_adapter_reset( void )
 
 int at_adapter_tx( char tx_input )
 {
+#ifdef GSM_CLICK_1
+
+#endif
+#ifdef GSM_CLICK_2
     if( tx_input != '\0' )
     {
         tx_buffer[ tx_idx++ ] = tx_input;
@@ -141,10 +145,18 @@ int at_adapter_tx( char tx_input )
         return 0;
     }
     return 0;
+#endif
+#ifdef GSM_CLICK_3
+
+#endif
 }
 
 void at_adapter_rx( char rx_input )
 {
+#ifdef GSM_CLICK_1
+
+#endif
+#ifdef GSM_CLICK_2
     if( rx_input == '\r' )
         term_f = true;
 
@@ -261,5 +273,9 @@ void at_adapter_rx( char rx_input )
         rx_buffer[ rx_idx ] = '\0';
         response_f = true;
     }
+#endif
+#ifdef GSM_CLICK_3
+
+#endif
 }
 /*************** END OF FUNCTIONS *********************************************/

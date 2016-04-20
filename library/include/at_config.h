@@ -27,13 +27,15 @@
 /******************************************************************************
 * Preprocessor Constants
 *******************************************************************************/
+
+//#define GSM_CLICK_1
+#define GSM_CLICK_2
+//#define GSM_CLICK_3
+
 /**
  * AT Head */
 #define AT_HEAD                                         "AT"
 #define AT_HEAD_SIZE                                    2
-
-#define AT_HEAD_CHARS                                   "+&"
-#define AT_HEAD_CHARS_SIZE                              2
 
 /**
  * General Error Message */
