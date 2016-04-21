@@ -62,6 +62,16 @@ extern "C"{
 void gsm_hal_reset( void );
 
 /**
+ * @brief PWR
+ *
+ * @par
+ * Power pin control
+ *
+ * @param[in] state
+ */
+void gsm_pwr_ctl( bool state );
+
+/**
  * @brief RTS
  *
  * @par
@@ -97,8 +107,6 @@ void gsm_hal_init( void );
  * @param[in] buffer
  */
 void gsm_hal_write( char *buffer );
-
-void gsm_hal_invert( bool invert );
 
 #ifdef __cplusplus
 } // extern "C"

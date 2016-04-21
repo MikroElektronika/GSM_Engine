@@ -27,10 +27,11 @@
 /******************************************************************************
 * Preprocessor Constants
 *******************************************************************************/
-
-//#define GSM_CLICK_1
-#define GSM_CLICK_2
-//#define GSM_CLICK_3
+/**
+ * GSM click */
+//#define GSM1_CLICK
+#define GSM2_CLICK
+//#define GSM3_CLICK
 
 /**
  * AT Head */

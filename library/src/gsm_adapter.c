@@ -1,6 +1,6 @@
 /****************************************************************************
-* Title                 :   AT PARSER
-* Filename              :   at_parser.h
+* Title                 :   GSM ADAPTER
+* Filename              :   gsm_adapter.h
 * Author                :   MSV
 * Origin Date           :   10/03/2016
 * Notes                 :   None
@@ -12,8 +12,8 @@
 *
 *****************************************************************************/
 /**
- * @file at_receiver.c
- * @brief AT Receiver
+ * @file gsm_adapter.c
+ * @brief GSM Adapter
  */
 /******************************************************************************
 * Includes
@@ -67,6 +67,25 @@ static char                     error[ AT_HEADER_SIZE ];
 void at_adapter_init( void )
 {
     gsm_hal_init();
+
+#ifdef GSM1_CLICK
+    gsm_pwr_ctl( true );
+    Delay_ms( 2500 );
+    gsm_pwr_ctl( false );
+    Delay_ms( 12500 );
+#endif
+#ifdef GSM2_CLICK
+    gsm_pwr_ctl( true );
+    Delay_ms( 100 );
+    gsm_pwr_ctl( false );
+    Delay_ms( 2500 );
+    gsm_pwr_ctl( true );
+    Delay_ms( 12500 );
+#endif
+#ifdef GSM3_CLICK
+
+#endif
+
     at_adapter_reset();
 
     err_c       = 0;
@@ -98,10 +117,10 @@ void at_adapter_reset( void )
 
 int at_adapter_tx( char tx_input )
 {
-#ifdef GSM_CLICK_1
+#ifdef GSM1_CLICK
 
 #endif
-#ifdef GSM_CLICK_2
+#ifdef GSM2_CLICK
     if( tx_input != '\0' )
     {
         tx_buffer[ tx_idx++ ] = tx_input;
@@ -153,10 +172,10 @@ int at_adapter_tx( char tx_input )
 
 void at_adapter_rx( char rx_input )
 {
-#ifdef GSM_CLICK_1
+#ifdef GSM1_CLICK
 
 #endif
-#ifdef GSM_CLICK_2
+#ifdef GSM2_CLICK
     if( rx_input == '\r' )
         term_f = true;
 
@@ -241,14 +260,12 @@ void at_adapter_rx( char rx_input )
 
             if( err_f )
             {
-                //gsm_rx_ctl( false );
                 rx_buffer[ rx_idx ] = '\0';
                 response_f = true;
             }
 
             if( !head_t )
             {
-                //gsm_rx_ctl( false );
                 rx_buffer[ rx_idx ] = '\0';
                 response_f = true;
             }
@@ -259,7 +276,6 @@ void at_adapter_rx( char rx_input )
 
         if( summ_f )
         {
-            //gsm_rx_ctl( false );
             rx_buffer[ rx_idx ] = '\0';
             response_f = true;
         }
@@ -269,12 +285,11 @@ void at_adapter_rx( char rx_input )
 
     if( rx_idx == AT_TRANSFER_SIZE )
     {
-        //gsm_rx_ctl( false );
         rx_buffer[ rx_idx ] = '\0';
         response_f = true;
     }
 #endif
-#ifdef GSM_CLICK_3
+#ifdef GSM3_CLICK
 
 #endif
 }

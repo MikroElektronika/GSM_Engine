@@ -84,6 +84,22 @@ void gsm_hal_reset( void )
 #endif
 }
 
+void gsm_pwr_ctl( bool state )
+{
+#if defined( __MIKROC_PRO_FOR_ARM__ )   || \
+    defined( __MIKROC_PRO_FOR_AVR__ )   || \
+    defined( __MIKROC_PRO_FOR_DSPIC__ ) || \
+    defined( __MIKROC_PRO_FOR_PIC32__ ) || \
+    defined( __MIKROC_PRO_FOR_8051__ )  || \
+    defined( __MIKROC_PRO_FOR_FT90x__ ) || \
+    defined( __MIKROC_PRO_FOR_PIC__ )
+    if ( state )
+        GSM_PWR = 1;
+    else
+        GSM_PWR = 0;
+#endif
+}
+
 bool gsm_tx_ctl()
 {
 #if defined( __MIKROC_PRO_FOR_ARM__ )   || \
@@ -127,13 +143,6 @@ void gsm_hal_init()
     defined( __MIKROC_PRO_FOR_PIC__ )
     write_uart_p            = UART_Wr_Ptr;
     write_uart_text_p       = UART_Write_Text;
-    
-    GSM_PWR = 1;
-    Delay_ms( 100 );
-    GSM_PWR = 0;
-    Delay_ms( 2500 );
-    GSM_PWR = 1;
-    Delay_ms( 12500 );
 #endif
     gsm_rx_ctl( true );
 }
