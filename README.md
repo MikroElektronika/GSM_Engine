@@ -1,5 +1,5 @@
 ![MikroE](http://www.mikroe.com/img/designs/beta/logo_small.png)
-#GSM Engine#
+#AT Engine#
 ##By [MikroElektronika](http://www.mikroe.com)##
 
 ###Tutorials on How to Use###
@@ -9,4 +9,3 @@
 
 [Example](http://learn.mikroe.com/gsm-part-3-gsm-2-click/)
 
-Generic GSM engine

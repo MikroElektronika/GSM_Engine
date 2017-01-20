@@ -1,0 +1,1 @@
+LOG(x) = SoftUART_Write_Text(x)
