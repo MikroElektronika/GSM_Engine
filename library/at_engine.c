@@ -1,262 +1,188 @@
-/**
- * at_engine.c
- *
- * @author MilosV
- * @copyright GPL-2.0
- */
-
-#include "at_engine.h"
-
-/* AT string size */
-#define AT_HEAD_SIZE                                    2
-
-/* Size of AT command. This should represent maximum size of request header */
-#define AT_HEADER_SIZE_MAX                             15
-
-/* Stores the pointer to the buffer and cleans it. */
-#define AT_BUFFER_INIT(ptr,max)                                                 \
-{ p_rx_buf = (ptr); rx_max = (max); rx_idx = 0;                                 \
-  memset( ( void* )p_rx_buf, 0, rx_max ); }
-
-/* Clears the content of the buffer */
-#define AT_BUFFER_RESET()                                                       \
-{ rx_idx = 0; *p_rx_buf = 0; }
-
-/* Sets all flags to false and all counters to the zero. */
-#define AT_CORE_INIT()                                                          \
-{ t_response_l = 0; t_response_c = 0; t_char_l = 50; t_char_c = 0; tmp_cnt = 0; \
-  t_response_f = false; t_char_f = false; response_f = false;                   \
-  no_response_f = false; cue_f = false;  }
-
-/* Cleans handlers storage. */
-#define AT_STORAGE_INIT()                                                       \
-{ at_cmd_storage_used = 0;                                                      \
-  for( tmp_cnt = 0; tmp_cnt < AT_STORAGE_SIZE; tmp_cnt++ ) {                    \
-    at_cmd_storage[ tmp_cnt ].hash = 0; at_cmd_storage[ tmp_cnt ].timeout  = 0; \
-    at_cmd_storage[ tmp_cnt ].getter = NULL;                                    \
-    at_cmd_storage[ tmp_cnt ].setter = NULL;                                    \
-    at_cmd_storage[ tmp_cnt ].tester = NULL;                                    \
-    at_cmd_storage[ tmp_cnt ].executer = NULL; }}
-
-/* Blocks sending of the new command if the AT Engine excepts response. */
-#define AT_WAIT_RESPONSE()                                                      \
-{ while( cue_f ) at_process(); }
-
-/* Puts the AT Engine to the blocked state. */
-#define AT_SET_CUE()                                                            \
-{ no_response_f = false; response_f = false; cue_f = true; }
-
-/* Releases the AT Engine from the blocked state. */
-#define AT_RESET_CUE()                                                          \
-{ no_response_f = false; response_f = false; cue_f = false; }
-
-/* Loads the global timer for the particular command. */
-#define AT_LOAD_TIMER(x)                                                        \
-{ t_response_l = x; t_response_c = 0; t_response_f = true; }
-
-/* Stop the global timer. */
-#define AT_STOP_TIMER()                                                         \
-{ t_response_f = false; }
-
-/* Restarts the character timer used to detect end of response. */
-#define AT_RESTART_T()                                                          \
-{ t_char_c = 0; t_char_f = true; }
-
-/* Stops the character timer. */
-#define AT_STOP_T()                                                             \
-{ t_char_f = false; }
-
 /*
- * Parser return valies
- */
-typedef enum
-{
-    AT_OK,
-    AT_ERROR,
-    AT_UNKNOWN
 
-}at_t;
+    at_engine.c
 
-/*
- * Command Type
- */
-typedef enum
-{
+    Copyright (c) 2011-2017 MikroElektronika.  All right reserved.
 
-    /* Unknown command */
-    AT_CMD_UNKNOWN                              = 0,
-    /* AT Get command */
-    AT_CMD_GET                                  = 1,
-    /* AT Set command */
-    AT_CMD_SET                                  = 2,
-    /* AT Test command */
-    AT_CMD_TEST                                 = 3,
-    /* AT Execute command */
-    AT_CMD_EXEC                                 = 4,
+--------------------------------------------------------------------------------
 
-}at_type_t;
+    Version : 0.1.1
 
-/*
- * Parser Structure
- *
- * Struct is used for storing the command with timeout and callbacks.
- * Command strings are converted to the hash code for easiest comparision.
- */
-typedef struct
-{
-    /* Command Hash Value */
-    uint32_t                hash;
-    /* Command Timeout */
-    uint32_t                timeout;
-    /* Get Callback */
-    at_cmd_cb               getter;
-    /* Set Callback */
-    at_cmd_cb               setter;
-    /* Test Callback */
-    at_cmd_cb               tester;
-    /* Execute Callback */
-    at_cmd_cb               executer;
+    Revision Log :
 
-}at_cmd_t;
+- 0.0.1 (Apr/2016) Module created                   Milos Vidojevic
+    * RX based engine
+    * Timer not required
+    * Write pointer assingment without user interaction
+    * Internal buffer with fixed size
+    * Internal handler storage
 
-/*         Variables
- ******************************************************************************/
+- 0.1.0 (Dec/2016)  Major changes					Milos Vidojevic
+    * Timer based engine
+    * Timer requierd
+    * User provides write (tx) pointer
+    * Buffer provided drunig initialization
 
-/* Hardware Flow Control Pins */
-#if defined( __MIKROC_PRO_FOR_ARM__ )       || \
-    defined( __MIKROC_PRO_FOR_DSPIC__ )     || \
-    defined( __MIKROC_PRO_FOR_PIC32__ )     || \
-    defined( __MIKROC_PRO_FOR_AVR__ )       || \
-    defined( __MIKROC_PRO_FOR_PIC__ )       || \
-    defined( __MIKROC_PRO_FOR_8051__ )      || \
-    defined( __MIKROC_PRO_FOR_FT90x__ )
-extern sfr sbit CTS_PIN;
-extern sfr sbit RTS_PIN;
-#endif
+- 0.1.1 (Apr/2017) Improvements						Milos Vidojevic
+    * MikroC coding rules
+    * Parsing improved - all known AT command types implemented 
+    * Hanlder protype improved - handler provides response type
+    * Handler storage moved to userspace
+    * HFC implemented
 
-/* Function pointer */
+*******************************************************************************/
+
+#include "__AT_Parser.h"
+
+// Serial write function prototypes depend on compiler/toolchain.
+/*----------------------------- UART HAL -------------------------------------*/
+
 #if defined( __MIKROC_PRO_FOR_ARM__ )       || \
     defined( __MIKROC_PRO_FOR_DSPIC__ )     || \
     defined( __MIKROC_PRO_FOR_PIC32__ )
-static void         ( *write_uart_p )           ( unsigned int data_out );
+static void ( *fpWriteUART )(unsigned int data_out);
+
 #elif defined( __MIKROC_PRO_FOR_AVR__ )     || \
       defined( __MIKROC_PRO_FOR_PIC__ )     || \
       defined( __MIKROC_PRO_FOR_8051__ )    || \
       defined( __MIKROC_PRO_FOR_FT90x__ )
-static void         ( *write_uart_p )           ( unsigned char data_out );
+static void ( *fpWriteUART )(unsigned char data_out);
+#else
+static void ( *fpWriteUART )(unsigned char data_out);							
 #endif
 
-static const uint8_t            header_size = 2;
+/*----------------------------- UART HAL END ---------------------------------*/
 
-/* Buffer Pointers*/
-static volatile uint8_t*        p_rx_buf;
-static volatile uint16_t        rx_idx;
-static uint16_t                 rx_max;
+/* Write pointer */
+static T_AT_UART_Write          fpWrite;
 
-/* Timer Flags */
-static volatile bool            t_response_f;
-static volatile bool            t_char_f;
+/* Engine flags and calls*/
+static volatile bool            fCue;
+static volatile bool            fBuffer;
+static volatile bool            fResponse;
+static volatile bool            fNoResponse;
+#define AT_WAIT_RESPONSE()                                                      \
+{ while( fCue ) AT_process(); }
+#define AT_BLOCK()                                                              \
+{ fNoResponse = false; fResponse = false; fCue = true; }
+#define AT_UNBLOCK()                                                            \
+{ fNoResponse = false; fResponse = false; fCue = false; }
 
-/* Timer Counters */
-static volatile uint32_t        t_response_c;
-static volatile uint32_t        t_char_c;
+/* Timer vars and calls */
+static volatile bool            tfGt;
+static volatile bool            tfSt;
+static volatile uint32_t        tcGt;
+static volatile uint32_t        tcSt;
+static volatile uint32_t        tlGt;
+static volatile uint32_t        tlSt;
+#define AT_GT_START()                                                           \
+{ tcGt = 0; tfGt = true; }
+#define AT_GT_STOP()                                                            \
+{ tfGt = false; }
+#define AT_ST_START()                                                           \
+{ tcSt = 0; tfSt = true; }
+#define AT_ST_STOP()                                                            \
+{ tfSt = false; }
 
-/* Timer Limits */
-static volatile uint32_t        t_response_l;
-static volatile uint32_t        t_char_l;
+/*
+ * Response Storage
+ *
+ * counter / size / pointer
+ *
+ * Still simle array...
+ */
+static volatile uint16_t            rxIdx;
+static uint16_t                     rxSize;
+static volatile uint8_t*            rxStorage;
+#define AT_CLEAN_BUFFER()                                                       \
+{ rxIdx = 0; *rxStorage = 0; }
 
-/* Temp Variables */
-static at_cmd_cb                tmp_cb;
-static uint8_t                  tmp_cnt;
-static uint32_t                 tmp_timer;
+/* Handler vars */
+static T_AT_handler                 fpHandler;
+static int                          flags;
 
-/* Callbacks */
-static volatile at_cmd_cb       cb;
-static volatile at_cmd_cb       cb_default;
+/*
+ * Handlers Storage
+ *      counter / size / pointer
+ */
+static uint16_t                     handlerIdx;
+static uint16_t                     handlerSize;
+static T_AT_storage*                handlerStorage;
 
-/* CB Storage */
-static uint8_t              at_cmd_storage_used;
-static at_cmd_t             at_cmd_storage      [ AT_STORAGE_SIZE ];
+/* Look up table for START MARK string, must have "" as 0 member */
+#define MS_LUT_S      6
+char MS_LUT[7][3] =
+{
+    "",             // Default - skipped by search
+    "+",            // AT+...
+    "#",            // AT#...
+    "$",            // AT$...
+    "%",            // AT%...
+    "\\",           // AT\...
+    "&"             // AT&...
+};
 
-/* Global Cue Flag - used to block sending of more than one command */
-static volatile bool            cue_f;
-/* Response Flag - used to start parsing of complete resposne */
-static volatile bool            response_f;
-/* No Response Flag - used to start parsing of incomplete response */
-static volatile bool            no_response_f;
+/* Look up table for END MARK string, must have "" as 0 member */
+/* ENDMARK represents the command type */
+#define AT_DEFAULT      0
+#define AT_TEST_F       1
+#define AT_GET_F        2
+#define AT_SET_F        3
+#define AT_URC_F        4
+#define AT_EXE_F        5
 
-/*         Private Functions Prototypes
+#define ME_LUT_S        6
+char ME_LUT[6][3] =
+{
+    "",             // Default - skipped by search
+    "=?",           // Test
+    "?",            // Get
+    "=",            // Set
+    ":",            // URC 100%
+    "\r"            // Exec
+};
+
+
+/*                 Private Function Prototypes
  ******************************************************************************/
 
 /*
- * @brief Transmission
- *
- * @param[in] uint8_t tx_input - pointer to command
- * @param[in] uint8_t delimiter - character to confirm command
+ * Transmission
  *
  * Transmission uses function pointer provided by the user as an argument
  * to the initialization of the engine.
  */
-static void _tx( uint8_t *tx_input, uint8_t delimiter );
+static void sendText( uint8_t *pInput, uint8_t delimiter );
 
 /*
- * @brief Hash code generation
- *
- * @param[in] char* cmd - pointer to command
- * @return uint32_t Hash code
+ * Simple Hash code generation
  *
  * Hash code is used to save the command to the storage in aim to have fixed
  * storage space for all functions.
  */
-static uint32_t _parse_hash( char *cmd );
+static uint32_t makeHash( char *pCmd );
 
 /*
- * @brief Search storage for provided command
+ * Search handler storage for provided command
  *
- * @param[in] char* cmd - pointer to command
- * @return uint16_t Command position inside the storage
- *
- * Function search the storage based on hash code. If function returns zero
- * command does not exists in storage area.
+ * Function search the storage based on sting length and hash code.
+ * If function returns zero command does not exists in storage area.
  */
-static uint16_t _parse_find( char* cmd );
+static uint16_t findHandler( char* pCmd );
 
 /*
- * @brief Save command to storage
+ * Search input for strings from LUT table.
+ * LUT table must be 2 dimensional char array.
  *
- * @param[in] char* command - command string
- * @param[in] uint32_t timeout - timeout for particular command
- * @param[in] at_cmd_cb getter - handler for GET command
- * @param[in] at_cmd_cb setter - handler for SET command
- * @param[in] at_cmd_cb tester - handler for TEST command
- * @param[in] at_cmd_cb executer - handler for EXECUTE command
- *
- * Function check does provided command already exist inside the storage and
- * writes the command with provided handlers to the first free space inside
- * the storage only in case if command does not exists in storage area.
+ * Depend of flag returned value is :
+ * - index of found string at LUT
+ * - found string offset inside input
+ * - (-1) no match
  */
-static void _parse_save( char *command, uint32_t timeout,
-                         at_cmd_cb getter, at_cmd_cb setter,
-                         at_cmd_cb tester, at_cmd_cb executer );
+static int searchLut( char* pInput, char (*pLut)[ 3 ], int lutSize, int flag );
 
 /*
- * @brief Preparsing
- *
- * @param[in] char* raw_in - raw command string
- * @param[in] char* clean_out - clean command string
- *
- * @return at_type_t command type
- *
- * Function cleans the provided command string from any arguments provided
- * alongside with command and returns command type. If command type is not
- * recognized EXECUTE type is returned as default command type. Cleaning is
- * needed for later generation of the hash code and searching of the storage
- * for the particular command.
- */
-static at_type_t _parse_pre( char *raw_in, char *clean_out );
-
-/*
- * @brief Parsing
+ * Parsing
  *
  * @param[in] char* input - AT Command
  * @param[out] at_cmd_cb* cb - handler pointer for the particular command
@@ -266,352 +192,332 @@ static at_type_t _parse_pre( char *raw_in, char *clean_out );
  * handler and timeout for the particular command. If command is not found
  * the default handler and default timeout will be returned.
  */
-static void _parse_exe( char *input, at_cmd_cb *cb, uint32_t *timeout );
+static uint8_t parseInput( char *pInput, T_AT_handler *pHandler, uint32_t *timeout );
 
-
-/*         Private Functions Definitions
+/*                 Private Function Definitions
  ******************************************************************************/
 
-static void _tx( uint8_t *tx_input, uint8_t delimiter )
+static void sendText( uint8_t *pInput, uint8_t delimiter )
 {
 #ifdef _DEBUG_
         LOG( "< WR >\r\n" );
 #endif
-    while( *tx_input )
+    while(*pInput)
     {
-        /**
-         * @todo
-         * Check CTS before every char and loop until last one
-         */
-#ifdef _DEBUG_
-        LOG_CH( *tx_input );
+#if( _AT_HFC_CONTROL )
+        while(!AT_getStateDCE())
+            ;
 #endif
-        write_uart_p( *tx_input++ );
+#ifdef _DEBUG_
+        LOG_CH(*tx_input);
+#endif
+        fpWrite(*pInput++);
     }
 
-    write_uart_p( delimiter );
-    write_uart_p( '\n' );
+    fpWrite(delimiter);
+    fpWrite('\n');
 #ifdef _DEBUG_
-    LOG_CH( delimiter );
-    LOG( "\r\n" );
+    LOG_CH(delimiter);
+    LOG("\r\n");
 #endif
 }
 
-static uint32_t _parse_hash( char *cmd )
+static uint32_t makeHash( char *pCmd )
 {
-    uint16_t ch     = 0;
-    uint32_t hash   = 4321;
-    while( ( ch = *( cmd++ ) ) )
-        hash = ( ( hash << 5 ) + hash ) + ch;
+    uint16_t ch;
+    uint32_t hash;
+
+    ch = 0;
+    hash = 0x05;
+    while((ch = *pCmd++))
+        hash += (ch << 1);
     return hash;
 }
 
-static uint16_t _parse_find( char* cmd )
+static uint16_t findHandler( char* pCmd )
 {
-    uint8_t _cnt = 0;
+    uint8_t     len;
+    uint16_t    idx;
+    uint32_t    hash;
 
-    uint32_t tmp_hash = _parse_hash( cmd );
-    for( _cnt = 0; _cnt < at_cmd_storage_used; _cnt++ )
-        if( at_cmd_storage[ _cnt ].hash == tmp_hash )
-            return _cnt;
-    return 0;
+    idx = 0;
+    len = strlen(pCmd);
+    hash = makeHash(pCmd);
+    for(idx = 1; idx < handlerIdx; idx++)
+        if(handlerStorage[idx].len == len)
+            if(handlerStorage[idx].hash == hash)
+                return idx;
+    return _AT_UNKNOWN;
 }
 
-static void _parse_save( char *command, uint32_t timeout,
-                         at_cmd_cb getter, at_cmd_cb setter,
-                         at_cmd_cb tester, at_cmd_cb executer )
+/* Flags */
+#define LUT_IDX         0
+#define IN_OFF          1
+static int searchLut( char* pInput, char (*pLut)[ 3 ], int lutSize, int flag )
 {
-    at_cmd_t cmd;
+    uint8_t     inLen;
+    uint8_t     inOff;
+    uint8_t     lutLen;
+    uint8_t     lutIdx;
 
-    cmd.hash        = _parse_hash( command );
-    cmd.timeout     = timeout;
-    cmd.getter      = getter;
-    cmd.setter      = setter;
-    cmd.tester      = tester;
-    cmd.executer    = executer;
-
-    if( strlen( command ) >= AT_HEADER_SIZE_MAX + AT_HEAD_SIZE )
-        return;
-
-    if( at_cmd_storage_used == AT_STORAGE_SIZE )
-        return;
-
-    if( _parse_find( command ) )
-        return;
-
-    at_cmd_storage[ at_cmd_storage_used ] = cmd;
-    at_cmd_storage_used++;
-}
-
-static at_type_t _parse_pre( char *raw_in, char *clean_out )
-{
-    uint8_t     _cnt                   = 0;
-    uint8_t     end_pos                   = 0;
-    uint8_t     set_pos                   = 0;
-    uint8_t     get_pos                   = 0;
-    uint8_t     start_pos                 = 0;
-    char*       tmp_ptr                   = raw_in;
-    char        tmp_cmd[ AT_HEADER_SIZE_MAX ] = { 0 };
-
-    if( strlen( tmp_ptr ) <= AT_HEAD_SIZE )
-        return AT_CMD_UNKNOWN;
-
-    strncpy( tmp_cmd, tmp_ptr, AT_HEADER_SIZE_MAX );
-
-    for( _cnt = 0; _cnt < AT_HEADER_SIZE_MAX; _cnt++ )
+    inLen = 0;
+    inOff = 0;
+    lutLen = 0;
+    lutIdx = 0;
+    if((inLen = strlen(pInput)) > _AT_CMD_MAXSIZE)
+        inLen = _AT_CMD_MAXSIZE;
+    for(lutIdx = 1; lutIdx < lutSize; lutIdx++)
     {
-        if( tmp_cmd[ _cnt ] == '\0' )
+        lutLen = strlen(pLut[lutIdx]);
+        for(inOff = 0; inOff < inLen; inOff++)
         {
-            if( !end_pos )
-                end_pos = _cnt;
-            break;
+            if(!strncmp(pLut[lutIdx], pInput + inOff, lutLen))
+            {
+                if(flag == LUT_IDX)
+                    return lutIdx;
+                else if(flag == IN_OFF)
+                    return inOff;
+            }
         }
-
-        /**
-         * @todo
-         * Setable array of characters for checking
-         * - some AT commands uses( #, $ ... )
-         */
-        if( ( tmp_cmd[ _cnt ] == '+') && !start_pos )
-            start_pos = _cnt;
-
-        if( ( tmp_cmd[ _cnt ] == '=' ) && !set_pos )
-            set_pos = _cnt;
-
-        if( ( tmp_cmd[ _cnt ] == '?' ) && !get_pos )
-            get_pos = _cnt;
-
-        if( ( ( ( tmp_cmd[ _cnt ] == '\r' )  ||
-                ( tmp_cmd[ _cnt ] == '\n' )  ||
-                ( tmp_cmd[ _cnt ] == ':' ) ) && !end_pos ) && start_pos )
-            end_pos = _cnt;
     }
-
-    if( !set_pos && !get_pos )
-    {
-        strncpy( clean_out, &tmp_cmd[ start_pos ], end_pos - start_pos );
-        return AT_CMD_EXEC;
-
-    } else if( !set_pos && get_pos ) {
-
-        strncpy( clean_out, &tmp_cmd[ start_pos ], get_pos - start_pos );
-        return AT_CMD_TEST;
-
-    } else if( set_pos && !get_pos ) {
-
-        strncpy( clean_out, &tmp_cmd[ start_pos ], set_pos - start_pos );
-        return AT_CMD_SET;
-
-    } else if( set_pos == get_pos - 1 ) {
-
-        strncpy( clean_out, &tmp_cmd[ start_pos ], set_pos - start_pos );
-        return AT_CMD_GET;
-    }
-
-    return AT_CMD_UNKNOWN;
+    return -1;
 }
 
-void _parse_exe( char *input, at_cmd_cb *cb, uint32_t *timeout )
+static uint8_t parseInput( char *pInput, T_AT_handler *pHandler, uint32_t *timeout )
 {
-    at_type_t   cmd_type                    = 0;
-    uint16_t    cmd_idx                     = 0;
-    char        cmd_temp[ AT_HEADER_SIZE_MAX ]  = { 0 };
+    uint8_t hIdx;
+    int     startOff;
+    int     endOff;
+    int     endIdx;
+    char    tmp[ _AT_CMD_MAXSIZE + 1 ];
 
-    if( !( cmd_type = _parse_pre( input, cmd_temp ) ) )
-    {
-        *cb = at_cmd_storage[ 0 ].tester;
-        *timeout = at_cmd_storage[ 0 ].timeout;
-        return;
-    }
-
-    if( !( cmd_idx = _parse_find( cmd_temp ) ) )
-    {
-        *cb = at_cmd_storage[ 0 ].tester;
-        *timeout = at_cmd_storage[ 0 ].timeout;
-        return;
-    }
-
-    switch ( cmd_type )
-    {
-        case AT_CMD_SET :
-            *cb = at_cmd_storage[ cmd_idx ].setter;
-            *timeout = at_cmd_storage[ cmd_idx ].timeout;
-        break;
-        case AT_CMD_GET :
-            *cb = at_cmd_storage[ cmd_idx ].getter;
-            *timeout = at_cmd_storage[ cmd_idx ].timeout;
-        break;
-        case AT_CMD_TEST :
-            *cb = at_cmd_storage[ cmd_idx ].tester;
-            *timeout = at_cmd_storage[ cmd_idx ].timeout;
-        break;
-        case AT_CMD_EXEC :
-            *cb = at_cmd_storage[ cmd_idx ].executer;
-            *timeout = at_cmd_storage[ cmd_idx ].timeout;
-        break;
-        case AT_CMD_UNKNOWN :
-            *cb = at_cmd_storage[ 0 ].executer;
-            *timeout = at_cmd_storage[ 0 ].timeout;
-        break;
-    }
-    return;
+    hIdx = 0;
+    startOff = 0;
+    endOff = 0;
+    endIdx = 0;
+    memset( tmp, 0, _AT_CMD_MAXSIZE + 1 );
+    if((startOff = searchLut(pInput, MS_LUT, MS_LUT_S, IN_OFF)) == -1)
+        startOff = 0;
+    if((endOff = searchLut(pInput, ME_LUT, ME_LUT_S, IN_OFF)) == -1)
+        endOff = _AT_CMD_MAXSIZE;
+    if((endIdx = searchLut(pInput, ME_LUT, ME_LUT_S, LUT_IDX)) == -1)
+        endIdx = 0;
+    strncpy(tmp, pInput + startOff, endOff - startOff);
+    hIdx = findHandler(tmp);
+    *pHandler = handlerStorage[hIdx].handler;
+    *timeout = handlerStorage[hIdx].timeout;
+    return endIdx;
 }
 
-/*     Public Functions
+/*                Public Function Definitions
  ******************************************************************************/
 
-void at_init
+void AT_initParser
 (
-    at_cmd_cb default_callback,
-    at_write_p default_write,
-    uint8_t *buffer_ptr,
-    uint16_t buffer_size
+        T_AT_UART_Write     pWrite,
+        T_AT_handler        pHandler,
+        uint32_t            cmdTimeout,
+        uint8_t*            pBuffer,
+        uint16_t            bufferSize,
+        T_AT_storage*       pStorage,
+        uint16_t            storageSize
 )
 {
-    at_cmd_t cmd;
+    T_AT_storage cmd;
 
-    cb_default          = default_callback;
-    write_uart_p        = default_write;
-    AT_CORE_INIT();
-    AT_BUFFER_INIT( buffer_ptr, buffer_size );
-    AT_STORAGE_INIT();
-    cmd.hash                                = _parse_hash( "" );
-    cmd.timeout                             = AT_DEFAULT_TIMEOUT;
-    cmd.getter                              = default_callback;
-    cmd.setter                              = default_callback;
-    cmd.tester                              = default_callback;
-    cmd.executer                            = default_callback;
-    at_cmd_storage[ at_cmd_storage_used ]   = cmd;
-    at_cmd_storage_used++;
+    tlSt            = _AT_ST_TIMER;
+    cmd.handler     = pHandler;
+    cmd.timeout     = cmdTimeout;
+    cmd.hash        = makeHash("");
+    cmd.len         = 0;
+    fpWrite         = pWrite;
+    rxIdx           = 0;
+    rxSize          = bufferSize;
+    rxStorage       = pBuffer;
+    handlerIdx      = 0;
+    handlerSize     = storageSize;
+    handlerStorage  = pStorage;
+    memset((void*)rxStorage, 0, rxSize);
+    memset((void*)handlerStorage, 0, handlerSize * sizeof(T_AT_storage));
+    handlerStorage[handlerIdx] = cmd;
+    handlerIdx++;
+    AT_BLOCK();
+    AT_UNBLOCK();
+    AT_GT_START();
+    AT_GT_STOP();
+    AT_ST_START();
+    AT_ST_STOP();
 }
 
-void at_rx( char rx_input )
+void AT_getChar( char rxInput )
 {
-    AT_SET_CUE();
-    AT_RESTART_T();
-    *( p_rx_buf + rx_idx++ ) = rx_input;
+    AT_BLOCK();
+    AT_ST_START();
+    *(rxStorage + rxIdx++) = rxInput;
 }
 
-void at_tick( void )
+void AT_tick()
 {
-    if( t_response_f )
-        if( t_response_c++ > t_response_l )
+    if(tfGt)
+    {
+        if(tcGt++ > tlGt)
         {
-            t_response_f = false;
-            t_response_c = 0;
-            *( p_rx_buf + rx_idx ) = 0;
-            no_response_f = true;
+            tfGt = false;
+            tcGt = 0;
+            *(rxStorage + rxIdx) = 0;
+            fNoResponse = true;
         }
-
-    if( t_char_f )
-        if( t_char_c++ > t_char_l )
+    }
+    if(tfSt)
+    {
+        if(tcSt++ > tlSt)
         {
-            t_char_f = false;
-            t_char_c = 0;
-            *( p_rx_buf + rx_idx ) = 0;
-            response_f = true;
+            tfSt = false;
+            tcSt = 0;
+            *(rxStorage + rxIdx) = 0;
+            fResponse = true;
         }
+    }
 }
 
-void at_cmd_save( char *cmd, uint32_t timeout,
-                  at_cmd_cb getter, at_cmd_cb setter,
-                  at_cmd_cb tester, at_cmd_cb executer )
+int AT_saveHandler( char *pCmd, uint32_t timeout, T_AT_handler pHandler )
 {
-    if( !setter )   setter = cb_default;
-    if( !getter )   getter = cb_default;
-    if( !tester )   tester = cb_default;
-    if( !executer ) executer = cb_default;
-    if( !timeout )  timeout = AT_DEFAULT_TIMEOUT;
-    _parse_save( cmd, timeout, getter, setter, tester, executer );
+    T_AT_storage cmd;
+
+    if(!pHandler)
+        pHandler = handlerStorage[0].handler;
+    if(!timeout)
+        timeout = handlerStorage[0].timeout;
+    cmd.len = strlen(pCmd);
+    if(cmd.len >= _AT_CMD_MAXSIZE)
+        return 0;
+    if(handlerIdx == handlerSize)
+        return 0;
+    if(findHandler(pCmd))
+        return 0;
+    cmd.hash        = makeHash(pCmd);
+    cmd.timeout     = timeout;
+    cmd.handler     = pHandler;
+    handlerStorage[handlerIdx] = cmd;
+    handlerIdx++;
+    return (handlerSize - handlerIdx);
 }
 
-void at_cmd_single( char *cmd )
+void AT_cmdSingle( char *pCmd )
 {
-    char* tmp = cmd;
+    T_AT_handler tmpCb;
 
     AT_WAIT_RESPONSE();
-    _parse_exe( tmp, &tmp_cb, &tmp_timer );
-    _tx( tmp, AT_TERMINATE );
-    AT_SET_CUE();
-    AT_LOAD_TIMER( tmp_timer );
+    parseInput(pCmd, &tmpCb, &tlGt);
+    sendText(pCmd, _AT_TERMINATE);
+    AT_BLOCK();
+    AT_GT_START();
+    AT_WAIT_RESPONSE();
+    Delay_ms( 100 );
 }
 
-void at_cmd_double( char *cmd, char *arg_1 )
+void AT_cmdDouble( char *pCmd, char *pArg1 )
 {
-    char *tmp       = cmd;
-    char *tmp_a1    = arg_1;
+    T_AT_handler tmpCb;
 
     AT_WAIT_RESPONSE();
-    _parse_exe( tmp, &tmp_cb, &tmp_timer );
-    _tx( tmp, AT_TERMINATE );
-    AT_SET_CUE();
-    AT_LOAD_TIMER( tmp_timer );
+    parseInput(pCmd, &tmpCb, &tlGt);
+    sendText(pCmd, _AT_TERMINATE);
+    AT_BLOCK();
+    AT_GT_START();
     AT_WAIT_RESPONSE();
-    AT_STOP_TIMER();
-    _tx( tmp_a1, AT_TERMINATE_ADD );
-    AT_SET_CUE();
-    AT_LOAD_TIMER( tmp_timer );
+    sendText(pArg1, _AT_TERMINATE_ADD);
+    AT_BLOCK();
+    AT_GT_START();
+    AT_WAIT_RESPONSE();
 }
 
-void at_cmd_triple( char *cmd, char *arg_1, char *arg_2 )
+void AT_cmdTriple( char *pCmd, char *pArg1, char *pArg2 )
 {
-    char *tmp       = cmd;
-    char *tmp_a1    = arg_1;
-    char *tmp_a2    = arg_2;
+    T_AT_handler tmpCb;
 
     AT_WAIT_RESPONSE();
-    _parse_exe( tmp, &tmp_cb, &tmp_timer );
-    _tx( tmp, AT_TERMINATE );
-    AT_SET_CUE();
-    AT_LOAD_TIMER( tmp_timer );
+    parseInput(pCmd, &tmpCb, &tlGt);
+    sendText(pCmd, _AT_TERMINATE );
+    AT_BLOCK();
+    AT_GT_START();
     AT_WAIT_RESPONSE();
-    AT_STOP_TIMER();
-    _tx( tmp_a1, AT_TERMINATE_ADD );
-    AT_SET_CUE();
-    AT_LOAD_TIMER( tmp_timer );
+    sendText(pArg1, _AT_TERMINATE_ADD);
+    AT_BLOCK();
+    AT_GT_START();
     AT_WAIT_RESPONSE();
-    AT_STOP_TIMER();
-    _tx( tmp_a2, AT_TERMINATE_ADD );
-    AT_SET_CUE();
-    AT_LOAD_TIMER( tmp_timer );
+    sendText(pArg2, _AT_TERMINATE_ADD);
+    AT_BLOCK();
+    AT_GT_START();
+    AT_WAIT_RESPONSE();
 }
 
-void at_process( void )
+void AT_process()
 {
     /*
-     * Check free space in buffer and handle situation if
+     * TODO: Check free space in buffer and handle situation if
      * buffer is near the end.
+     *
+     * Hardware flow control handle
      */
-
-    if( response_f )
+    if(fBuffer)
     {
-        /*
-         * Handle RTS until callback finishes execution if HFC supports
-         * bidirectional communication - handshake method.
-         */
-        AT_STOP_T();
-        AT_STOP_TIMER();
-        _parse_exe( p_rx_buf, &cb, &tmp_timer );
-        cb( p_rx_buf );
-        AT_BUFFER_RESET();
-        AT_RESET_CUE();
+
+
+
     }
 
-    if( no_response_f )
+    if(fResponse)
     {
-        /*
-         * Handle RTS until callback finishes execution if HFC supports
-         * bidirectional communication - handshake method.
-         */
-        AT_STOP_T();
-        AT_STOP_TIMER();
-        _parse_exe( p_rx_buf, &cb, &tmp_timer );
-        cb( p_rx_buf );
-        AT_BUFFER_RESET();
-        AT_RESET_CUE();
+#if( _AT_HFC_CONTROL )
+            AT_setStateDTE(false);
+#endif
+        AT_ST_STOP();
+        AT_GT_STOP();
+        flags = parseInput(rxStorage, &fpHandler, &tlGt);
+        fpHandler(rxStorage, &flags);
+        AT_CLEAN_BUFFER();
+        AT_UNBLOCK();
+#if( _AT_HFC_CONTROL )
+        AT_setStateDTE(true);
+#endif
+    }
+
+    if(fNoResponse)
+    {
+#if( _AT_HFC_CONTROL )
+        AT_setStateDTE(false);
+#endif
+        AT_ST_STOP();
+        AT_GT_STOP();
+        flags = parseInput(rxStorage, &fpHandler, &tlGt);
+        fpHandler(rxStorage, &flags);
+        AT_CLEAN_BUFFER();
+        AT_UNBLOCK();
+#if( _AT_HFC_CONTROL )
+        AT_setStateDTE(true);
+#endif
     }
 }
 
+/*------------------------------------------------------------------------------
 
-/*                                                              End of File
- */
+  at_engine.c
+
+  Copyright (c) 2011-2017 MikroElektronika.  All right reserved.
+
+    This library is free software; you can redistribute it and/or
+  modify it under the terms of the GNU Lesser General Public
+  License as published by the Free Software Foundation; either
+  version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+  Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+  License along with this library; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+
+------------------------------------------------------------------------------*/

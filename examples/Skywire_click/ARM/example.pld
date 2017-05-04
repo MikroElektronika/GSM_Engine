@@ -1,2 +1,0 @@
-LOG(x) = UART1_Write_Text(x)
-LOGCH(x) = UART1_Write(x)

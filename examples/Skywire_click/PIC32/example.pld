@@ -1,1 +1,0 @@
-LOG(x) = UART5_Write_Text(x)
