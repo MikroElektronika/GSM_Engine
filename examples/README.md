@@ -1,4 +1,4 @@
-## Examples ##
+![MikroE](http://www.mikroe.com/img/designs/beta/logo_small.png)
 
 Examples created using MikroElektronika's
 [compilers](https://shop.mikroe.com/compilers) and 
