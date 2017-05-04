@@ -30,12 +30,13 @@
     * Handler storage moved to userspace
     * HFC implemented
 
-*******************************************************************************/
+------------------------------------------------------------------------------*/
 
 #include "__AT_Parser.h"
 
-// Serial write function prototypes depend on compiler/toolchain.
+
 /*----------------------------- UART HAL -------------------------------------*/
+/*       Serial write function prototypes depend on compiler/toolchain.       */
 
 #if defined( __MIKROC_PRO_FOR_ARM__ )       || \
     defined( __MIKROC_PRO_FOR_DSPIC__ )     || \
@@ -86,10 +87,7 @@ static volatile uint32_t        tlSt;
 
 /*
  * Response Storage
- *
- * counter / size / pointer
- *
- * Still simle array...
+ *      counter / size / pointer
  */
 static volatile uint16_t            rxIdx;
 static uint16_t                     rxSize;
@@ -97,7 +95,9 @@ static volatile uint8_t*            rxStorage;
 #define AT_CLEAN_BUFFER()                                                       \
 { rxIdx = 0; *rxStorage = 0; }
 
-/* Handler vars */
+/* 
+ * Handler vars 
+ */
 static T_AT_handler                 fpHandler;
 static int                          flags;
 
@@ -109,7 +109,9 @@ static uint16_t                     handlerIdx;
 static uint16_t                     handlerSize;
 static T_AT_storage*                handlerStorage;
 
-/* Look up table for START MARK string, must have "" as 0 member */
+/* 
+ * Look up table for START MARK string, must have "" as 0 member 
+ */
 #define MS_LUT_S      6
 char MS_LUT[7][3] =
 {
@@ -122,8 +124,11 @@ char MS_LUT[7][3] =
     "&"             // AT&...
 };
 
-/* Look up table for END MARK string, must have "" as 0 member */
-/* ENDMARK represents the command type */
+/* 
+ * Look up table for END MARK string, must have "" as 0 member
+ *
+ *      ENDMARK represents the command type 
+ */
 #define AT_DEFAULT      0
 #define AT_TEST_F       1
 #define AT_GET_F        2
@@ -142,9 +147,9 @@ char ME_LUT[6][3] =
     "\r"            // Exec
 };
 
-
-/*                 Private Function Prototypes
- ******************************************************************************/
+/*-----------------------------------------------------------------------------                
+        Private Function Prototypes
+ ------------------------------------------------------------------------------*/
 
 /*
  * Transmission
@@ -194,8 +199,9 @@ static int searchLut( char* pInput, char (*pLut)[ 3 ], int lutSize, int flag );
  */
 static uint8_t parseInput( char *pInput, T_AT_handler *pHandler, uint32_t *timeout );
 
-/*                 Private Function Definitions
- ******************************************************************************/
+/*-----------------------------------------------------------------------------            
+        Private Function Definitions
+ ------------------------------------------------------------------------------*/
 
 static void sendText( uint8_t *pInput, uint8_t delimiter )
 {
@@ -309,8 +315,9 @@ static uint8_t parseInput( char *pInput, T_AT_handler *pHandler, uint32_t *timeo
     return endIdx;
 }
 
-/*                Public Function Definitions
- ******************************************************************************/
+/*-----------------------------------------------------------------------------
+        Public Function Definitions
+ ------------------------------------------------------------------------------*/
 
 void AT_initParser
 (
